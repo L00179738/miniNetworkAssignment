@@ -1,71 +1,224 @@
+# Network should be configured to address scalability, load balancer, security and extensibility
+# Initially, two Availability Zones are configured
+# Bastion (jump box) will be configured to ensure no data is exposed in public network
+# Front-end web servers will be deployed into a scalable private subnet
+# applications server will be deployed into scalable private subnet
+# RDS database (or any other DB) will be deployed into the private subnet
+# Internet gateway with routing tables will be applied and implemented
+# CIDR blocks are defined for all of the subnets
+
+
 Parameters:
-  SecurityGroupDescription:
-    Description: Security Group Description
+  VirtualCloudCIDR:
+    Description: CIDR Definition for VPC - Class B
     Type: String
-  KeyName:
-    Description: Key Pair for EC2
-    Type: 'AWS::EC2::KeyPair::KeyName'
+    Default: 10.10.0.0/16
+  PublicSubnetACIDR:
+    Description: CIDR Definition for Bastipn - Class C
+    Type: String
+    Default: 10.10.10.0/24
+  PublicSubnetBCIDR:
+    Description: CIDR Definition for VPC - Class B
+    Type: String
+    Default: 10.10.11.0/24
+  FrontEndWebACIDR:
+    Description: CIDR Definition for VPC - Class B
+    Type: String
+    Default: 10.10.20.0/24
+  FrontEndWebBCIDR:
+    Description: CIDR Definition for VPC - Class B
+    Type: String
+    Default: 10.10.21.0/24
 
+
+  VirtualCloudDescription:
+    Description: Encapsulated environment for HITT training courses system
+    Type: String
+
+  InstanceType:
+    Description: Instance type for selected zone
+    Type: String
+    Default: t3.micro
+
+  AvailabilityRegion:
+    Description: Region for the deployment
+    Type: String
+    Default: eu-north-1a
+
+  LinuxImage:
+    Description: AMI Image Name for the region
+    Type: String
+    Default: ami-03a2c69daedb78c95
+
+  SshPort:
+    Description: SSH Port to access Bastion
+    Type: Number
+    Default: 22
+    MinValue: 22
+    MaxValue: 65535
+
+#  SecurityGroupDescription:
+#    Description: Security Group Description
+#    Type: String
+#  KeyName:
+#    Description: Key Pair for EC2
+#    Type: 'AWS::EC2::KeyPair::KeyName'
+#
 Resources:
-  EC2Instance1:
-    Type: AWS::EC2::Instance
+#  VPC Container
+  VirtualCloud:
+    Type: AWS::EC2::VPC
     Properties:
-      AvailabilityZone: eu-north-1a
-      ImageId: ami-03a2c69daedb78c95
-      InstanceType: t3.micro
-      SecurityGroups:
-        - !Ref EC2SecurityGroup
-      KeyName: !Ref KeyName
-      UserData:
-        Fn::Base64: !Sub |
-          #!/bin/bash
-          yum update -y
-          yum install -y httpd
-          systemctl start httpd
-          systemctl enable httpd
-          #echo "<h1>Hello from Region eu-north-1a</h1>" > /var/www/html/index.html
-
-  EC2Instance2:
-    Type: AWS::EC2::Instance
+      CidrBlock: !Ref VirtualCloudCIDR
+      EnableDnsHostnames: true
+      EnableDnsSupport: true
+      Tags:
+        - Key: Name
+          Value: !Ref VirtualCloudDescription
+#
+  PublicSubnetA:
+    Type: AWS::EC2::Subnet
     Properties:
-      AvailabilityZone: eu-north-1b
-      ImageId: ami-03a2c69daedb78c95
-      InstanceType: t2.micro
-      SecurityGroups:
-        - !Ref EC2SecurityGroup
-      KeyName: !Ref KeyName
-      UserData:
-        Fn::Base64: !Sub |
-          #!/bin/bash
-          yum update -y
-          yum install -y httpd
-          systemctl start httpd
-          systemctl enable httpd
-          #echo "<h1>Hello from Region eu-north-1b</h1>" > /var/www/html/index.html          
+      VpcId: !Ref VirtualCloud
+      AvailabilityZone: !Select [ 0, !GetAZs '' ]
+      CidrBlock: !Ref PublicSubnetACIDR
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub ${VirtualCloudDescription} Public Subnet for Bastion [AZ0]
+  PublicSubnetB:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VirtualCloud
+      AvailabilityZone: !Select [ 1, !GetAZs '' ]
+      CidrBlock: !Ref PublicSubnetBCIDR
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub ${VirtualCloudDescription} Public Subnet for Bastion [AZ1]
 
-  ELBSecurityGroup:
+  BastionAutoScalingGroup:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      AutoScalingGroupName: !Sub ${VirtualCloudDescription} Auto Scaling Group for Bastion
+#      LaunchConfigurationName: !Ref BastionLaunchTemplate
+      LaunchTemplate:
+        LaunchTemplateId: !Ref BastionLaunchTemplate
+      VPCZoneIdentifier:
+        - !Ref PublicSubnetA
+        - !Ref PublicSubnetB
+      MinSize: 1
+      MaxSize: 1
+      DesiredCapacity: 1
+
+#  BastionLaunchConfiguration:
+#    Type: AWS::AutoScaling::LaunchConfiguration
+#    Properties:
+#      LaunchConfigurationName: !Sub ${VirtualCloudDescription} Bastion Launch Config
+#      AssociatePublicIpAddress: true
+#      ImageId: !Ref LinuxImage
+#      InstanceType: !Ref InstanceType
+#      SecurityGroups:
+#        - !Ref SecurityGroup
+  BastionLaunchTemplate:
+    Type: AWS::EC2::LaunchTemplate
+    Properties:
+      LaunchTemplateName: !Sub '${AWS::StackName}-bastion-launch-template'
+      LaunchTemplateData:
+        NetworkInterfaces:
+          - DeviceIndex: 0
+            AssociatePublicIpAddress: true
+            Groups:
+              - !Ref SecurityGroup
+            DeleteOnTermination: true
+        Placement:
+          Tenancy: default
+        ImageId: !Ref LinuxImage
+        InstanceType: !Ref InstanceType
+
+  SecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupDescription: ELB Security Group
-      SecurityGroupIngress:
-        - IpProtocol: tcp
-          FromPort: 80
-          ToPort: 80
-          CidrIp: 0.0.0.0/0
+      GroupDescription: Bastion Host Security group
+      VpcId: !Ref VirtualCloud
+      GroupName: Bastion Security Group
 
-  EC2SecurityGroup:
+#  SecurityGroupSshIngressRule:
+#    Type: AWS::EC2::SecurityGroupIngress
+#    Properties:
+#      GroupId: !Ref SecurityGroup
+#      IpProtocol: "tcp"
+#      FromPort: !Ref SshPort
+#      ToPort: !Ref SshPort
+#      CidrIp: !Ref SourceCidr
+
+  NoIngressSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupDescription: !Ref SecurityGroupDescription
-      SecurityGroupIngress:
-        - IpProtocol: tcp
-          FromPort: 80
-          ToPort: 80
-          SourceSecurityGroupId:
-            Fn::GetAtt:
-              - ELBSecurityGroup
-              - GroupId
-        - IpProtocol: tcp
-          FromPort: 22
-          ToPort: 22
-          CidrIp: 0.0.0.0/0
+      GroupName: "no-ingress-sg"
+      GroupDescription: "General Security Rule"
+      VpcId: !Ref VirtualCloud
+
+#
+#  EC2Instance1:
+#    Type: AWS::EC2::Instance
+#    Properties:
+#      AvailabilityZone: eu-north-1a
+#      ImageId: ami-03a2c69daedb78c95
+#      InstanceType: t3.micro
+#      SecurityGroups:
+#        - !Ref EC2SecurityGroup
+#      KeyName: !Ref KeyName
+#      UserData:
+#        Fn::Base64: !Sub |
+#          #!/bin/bash
+#          yum update -y
+#          yum install -y httpd
+#          systemctl start httpd
+#          systemctl enable httpd
+#          #echo "<h1>Hello from Region eu-north-1a</h1>" > /var/www/html/index.html
+#
+#  EC2Instance2:
+#    Type: AWS::EC2::Instance
+#    Properties:
+#      AvailabilityZone: eu-north-1b
+#      ImageId: ami-03a2c69daedb78c95
+#      InstanceType: t3.micro
+#      SecurityGroups:
+#        - !Ref EC2SecurityGroup
+#      KeyName: !Ref KeyName
+#      UserData:
+#        Fn::Base64: !Sub |
+#          #!/bin/bash
+#          yum update -y
+#          yum install -y httpd
+#          systemctl start httpd
+#          systemctl enable httpd
+#          #echo "<h1>Hello from Region eu-north-1b</h1>" > /var/www/html/index.html
+#
+#  ELBSecurityGroup:
+#    Type: AWS::EC2::SecurityGroup
+#    Properties:
+#      GroupDescription: ELB Security Group
+#      SecurityGroupIngress:
+#        - IpProtocol: tcp
+#          FromPort: 80
+#          ToPort: 80
+#          CidrIp: 0.0.0.0/0
+#
+#  EC2SecurityGroup:
+#    Type: AWS::EC2::SecurityGroup
+#    Properties:
+#      GroupDescription: !Ref SecurityGroupDescription
+#      SecurityGroupIngress:
+#        - IpProtocol: tcp
+#          FromPort: 80
+#          ToPort: 80
+#          SourceSecurityGroupId:
+#            Fn::GetAtt:
+#              - ELBSecurityGroup
+#              - GroupId
+#        - IpProtocol: tcp
+#          FromPort: 22
+#          ToPort: 22
+#          CidrIp: 0.0.0.0/0

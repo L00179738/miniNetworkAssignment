@@ -1,6 +1,7 @@
 # Mini network assignment
 
-A company wants to have a network supporting management of customized HITT training routes for user location conaining running routes.
+A company wants to have a network supporting management of customized HITT training routes for 
+user location conaining running routes.
 
 - company is growing rapidly
 - solution have to be extensible from the start
