@@ -198,8 +198,8 @@ Resources:
       VPCZoneIdentifier:
         - !Ref FrontEndWebSubnetA
         - !Ref FrontEndWebSubnetB
-      LoadBalancerNames:
-        - !Ref FronEndWebLoadBalancer
+      TargetGroupARNs:
+        - !Ref BalancerTargetGroup
       MinSize: 1
       MaxSize: 6
       DesiredCapacity: 2
@@ -211,13 +211,49 @@ Resources:
       LaunchTemplateData:
         InstanceType: !Ref InstanceType
         ImageId: !Ref LinuxImage
-        SecurityGroupIds:
-          - BastionSecurityGroup
-#        UserData:
+        NetworkInterfaces:
+          - DeviceIndex: 0
+            AssociatePublicIpAddress: true
+            Groups:
+              - !Ref BastionSecurityGroup
+            DeleteOnTermination: true
+
+  BalancerTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Port: 80
+      Protocol: HTTP
+      VpcId: VirtualCloud
+
+  FrontEndWebServerLoadBalancer:
+    Type: AWS::ElasticLoadBalancing::LoadBalancer
+    Properties:
+      LoadBalancerName: "FEWLoadBalancer"
+      Listeners:
+        - LoadBalancerPort: "80"
+          InstancePort: "80"
+          Protocol: "HTTP"
+      Subnets:
+        - !Ref FrontEndWebSubnetA
+        - !Ref FrontEndWebSubnetB
+      HealthCheck:
+        Target: "HTTP:80/"
+        HealthyThreshold: "2"
+        UnhealthyThreshold: "5"
+        Interval: "50"
+        Timeout: "3"
 
 
 
-#  SecurityGroupSshIngressRule:
+  NoIngressSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: "no-ingress-sg"
+      GroupDescription: "General Security Rule"
+      VpcId: !Ref VirtualCloud
+
+
+          #  SecurityGroupSshIngressRule:
 #    Type: AWS::EC2::SecurityGroupIngress
 #    Properties:
 #      GroupId: !Ref SecurityGroup
@@ -226,12 +262,6 @@ Resources:
 #      ToPort: !Ref SshPort
 #      CidrIp: !Ref SourceCidr
 
-  NoIngressSecurityGroup:
-    Type: AWS::EC2::SecurityGroup
-    Properties:
-      GroupName: "no-ingress-sg"
-      GroupDescription: "General Security Rule"
-      VpcId: !Ref VirtualCloud
 
 #
 #  EC2Instance1:
