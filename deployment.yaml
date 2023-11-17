@@ -30,6 +30,11 @@ Parameters:
     Type: String
     Default: 10.10.21.0/24
 
+  DestinationCIDR:
+    Description: CIDR Definition for VPC - Class B
+    Type: String
+    Default: 0.0.0.0/0
+
   VirtualCloudDescription:
     Description: Encapsulated environment for HITT training courses system
     Type: String
@@ -242,6 +247,43 @@ Resources:
         UnhealthyThreshold: "5"
         Interval: "50"
         Timeout: "3"
+
+# NETWORK DEFINITION
+  InternetGateway:
+    Type: AWS::EC2::EgressOnlyInternetGateway
+    Properties:
+      VpcId: !Ref VirtualCloud
+
+  AttachGateway:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref VirtualCloud
+      InternetGatewayId: !Ref InternetGateway
+
+  RouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VirtualCloud
+
+  Route:
+    Type: AWS::EC2::Route
+    DependsOn: AttachGateway
+    Properties:
+      RouteTableId: !Ref RouteTable
+      DestinationCidrBlock: !Ref DestinationCIDR
+      GatewayId: !Ref InternetGateway
+
+  PublicSubnetARouteTable:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnetA
+      RouteTableId: !Ref RouteTable
+
+  PublicSubnetBRouteTable:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnetB
+      RouteTableId: !Ref RouteTable
 
   NoIngressSecurityGroup:
     Type: AWS::EC2::SecurityGroup
