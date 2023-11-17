@@ -121,6 +121,7 @@ Resources:
       VpcId: !Ref VirtualCloud
       AvailabilityZone: !Select [ 0, !GetAZs '' ]
       CidrBlock: !Ref FrontEndWebACIDR
+      MapPublicIpOnLaunch: false
       Tags:
         - Key: Name
           Value: !Sub ${VirtualCloudDescription} Private Subnet for Front End Web system [AZ0]
@@ -131,6 +132,8 @@ Resources:
       VpcId: !Ref VirtualCloud
       AvailabilityZone: !Select [ 1, !GetAZs '' ]
       CidrBlock: !Ref FrontEndWebBCIDR
+      MapPublicIpOnLaunch: false
+
       Tags:
         - Key: Name
           Value: !Sub ${VirtualCloudDescription} Private Subnet for Front End Web system[AZ1]
@@ -283,6 +286,19 @@ Resources:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
       SubnetId: !Ref PublicSubnetB
+      RouteTableId: !Ref RouteTable
+#Deine NAT for private subnets
+
+  FrontEndWebSubnetARouteTable:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref FrontEndWebSubnetA
+      RouteTableId: !Ref RouteTable
+
+  FrontEndWebBRouteTable:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref FrontEndWebSubnetA
       RouteTableId: !Ref RouteTable
 
   NoIngressSecurityGroup:
