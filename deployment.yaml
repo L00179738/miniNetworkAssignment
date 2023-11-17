@@ -14,7 +14,7 @@ Parameters:
     Type: String
     Default: 10.10.0.0/16
   PublicSubnetACIDR:
-    Description: CIDR Definition for Bastipn - Class C
+    Description: CIDR Definition for Bastion - Class C
     Type: String
     Default: 10.10.10.0/24
   PublicSubnetBCIDR:
@@ -98,6 +98,7 @@ Resources:
       Tags:
         - Key: Name
           Value: !Sub ${VirtualCloudDescription} Public Subnet for Bastion [AZ0]
+
   PublicSubnetB:
     Type: AWS::EC2::Subnet
     Properties:
@@ -108,6 +109,27 @@ Resources:
       Tags:
         - Key: Name
           Value: !Sub ${VirtualCloudDescription} Public Subnet for Bastion [AZ1]
+
+  FrontEndWebSubnetA:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VirtualCloud
+      AvailabilityZone: !Select [ 0, !GetAZs '' ]
+      CidrBlock: !Ref FrontEndWebACIDR
+      Tags:
+        - Key: Name
+          Value: !Sub ${VirtualCloudDescription} Private Subnet for Front End Web system [AZ0]
+
+  FrontEndWebSubnetB:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VirtualCloud
+      AvailabilityZone: !Select [ 1, !GetAZs '' ]
+      CidrBlock: !Ref FrontEndWebBCIDR
+      Tags:
+        - Key: Name
+          Value: !Sub ${VirtualCloudDescription} Private Subnet for Front End Web system[AZ1]
+
 
   BastionAutoScalingGroup:
     Type: AWS::AutoScaling::AutoScalingGroup
@@ -166,6 +188,32 @@ Resources:
           ToPort: 22
           CidrIp: 0.0.0.0/0
 
+  FrontEndWebAutoScaling:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      AutoScalingGroupName: !Sub ${VirtualCloudDescription} Front End Servers ASG
+      LaunchTemplate:
+        LaunchTemplateId: !Ref FrontEndWebLaunchTemplate
+        Version: !Ref LaunchTemplateVersionNumber
+      VPCZoneIdentifier:
+        - !Ref FrontEndWebSubnetA
+        - !Ref FrontEndWebSubnetB
+      LoadBalancerNames:
+        - !Ref FronEndWebLoadBalancer
+      MinSize: 1
+      MaxSize: 6
+      DesiredCapacity: 2
+
+  FrontEndWebLaunchTemplate:
+    Type: AWS::EC2::LaunchTemplate
+    Properties:
+      LaunchTemplateName: WebServerLaunchTemplate
+      LaunchTemplateData:
+        InstanceType: !Ref InstanceType
+        ImageId: !Ref LinuxImage
+        SecurityGroupIds:
+          - BastionSecurityGroup
+#        UserData:
 
 
 
