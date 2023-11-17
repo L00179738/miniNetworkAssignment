@@ -223,7 +223,7 @@ Resources:
     Properties:
       Port: 80
       Protocol: HTTP
-      VpcId: VirtualCloud
+      VpcId: !Ref VirtualCloud
 
   FrontEndWebServerLoadBalancer:
     Type: AWS::ElasticLoadBalancing::LoadBalancer
@@ -242,8 +242,6 @@ Resources:
         UnhealthyThreshold: "5"
         Interval: "50"
         Timeout: "3"
-
-
 
   NoIngressSecurityGroup:
     Type: AWS::EC2::SecurityGroup
