@@ -57,6 +57,19 @@ Parameters:
     MinValue: 22
     MaxValue: 65535
 
+  KeyName:
+    Description: security key name
+    Type: String
+    Default: TestKP
+
+  LaunchTemplateVersionNumber:
+    Default: 1
+    Type: String
+
+  SecurityGroupDescription:
+    Type: String
+    Default: EC2 Security Group
+
 #  SecurityGroupDescription:
 #    Description: Security Group Description
 #    Type: String
@@ -104,6 +117,7 @@ Resources:
 #      LaunchConfigurationName: !Ref BastionLaunchTemplate
       LaunchTemplate:
         LaunchTemplateId: !Ref BastionLaunchTemplate
+        Version: !Ref LaunchTemplateVersionNumber
       VPCZoneIdentifier:
         - !Ref PublicSubnetA
         - !Ref PublicSubnetB
@@ -130,11 +144,13 @@ Resources:
             AssociatePublicIpAddress: true
             Groups:
               - !Ref SecurityGroup
+#              - !Ref EC2SecurityGroup
             DeleteOnTermination: true
         Placement:
           Tenancy: default
         ImageId: !Ref LinuxImage
         InstanceType: !Ref InstanceType
+        KeyName: !Ref KeyName
 
   SecurityGroup:
     Type: AWS::EC2::SecurityGroup
@@ -142,6 +158,14 @@ Resources:
       GroupDescription: Bastion Host Security group
       VpcId: !Ref VirtualCloud
       GroupName: Bastion Security Group
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: 0.0.0.0/0
 
 #  SecurityGroupSshIngressRule:
 #    Type: AWS::EC2::SecurityGroupIngress
