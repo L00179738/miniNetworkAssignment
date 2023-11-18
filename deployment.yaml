@@ -29,6 +29,14 @@ Parameters:
     Description: CIDR Definition for VPC - Class B
     Type: String
     Default: 10.10.21.0/24
+  DBSubnetACIDR:
+    Description: CIDR Definition for VPC - Class B
+    Type: String
+    Default: 10.10.50.0/24
+  DBSubnetBCIDR:
+    Description: CIDR Definition for VPC - Class B
+    Type: String
+    Default: 10.10.51.0/24
 
   DestinationCIDR:
     Description: CIDR Definition for VPC - Class B
@@ -133,10 +141,40 @@ Resources:
       AvailabilityZone: !Select [ 1, !GetAZs '' ]
       CidrBlock: !Ref FrontEndWebBCIDR
       MapPublicIpOnLaunch: false
-
       Tags:
         - Key: Name
           Value: !Sub ${VirtualCloudDescription} Private Subnet for Front End Web system[AZ1]
+
+  DBSubnetA:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VirtualCloud
+      AvailabilityZone: !Select [ 0, !GetAZs '' ]
+      CidrBlock: !Ref DBSubnetACIDR
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: !Sub ${VirtualCloudDescription} Private Subnet for RDS [AZ0]
+
+  DBSubnetB:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VirtualCloud
+      AvailabilityZone: !Select [ 1, !GetAZs '' ]
+      CidrBlock: !Ref DBSubnetBCIDR
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: !Sub ${VirtualCloudDescription} Private Subnet for RDS [AZ1]
+
+  DBSubnetGroup:
+    Type: "AWS::RDS::DBSubnetGroup"
+    Properties:
+      DBSubnetGroupName: "DB Subnet Group"
+      DBSubnetGroupDescription: "Subnet Group"
+      SubnetIds:
+        - !Ref "DBSubnetA"
+        - !Ref "DBSubnetB"
 
   # NETWORK DEFINITION
   InternetGateway:
@@ -204,7 +242,7 @@ Resources:
       DestinationCidrBlock: !Ref DestinationCIDR
       NatGatewayId: !Ref NATGatewayA
   FrontEndWebSubnetARouteTable:
-    Type: AWS::EC2::SubnetRouteTableAssociation
+    Type: AWS::EC2::SubnetRouteTableAssociationZ
     Properties:
       SubnetId: !Ref FrontEndWebSubnetA
       RouteTableId: !Ref PrivateRouteTableA
@@ -342,7 +380,24 @@ Resources:
         - LoadBalancerPort: "80"
           InstancePort: "80"
           Protocol: "HTTP"
-#      HealthCheck:
+
+
+# RDs instance
+  RDSInstance:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      AllocatedStorage: '5'
+      DBInstanceClass: 'db.t3.micro'
+      Engine: 'mysql'
+      EngineVersion: '5.7'
+      MasterUsername: 'root'
+      MasterUserPassword: 'Password123'
+      VPCSecurityGroups:
+        - !Ref BastionSecurityGroup
+      DBSubnetGroupName:
+        Ref: "DBSubnetGroup"
+
+          #      HealthCheck:
 #        Target: "HTTP:80/"
 #        HealthyThreshold: "2"
 #        UnhealthyThreshold: "5"
