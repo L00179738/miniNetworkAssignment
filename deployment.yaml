@@ -138,6 +138,94 @@ Resources:
         - Key: Name
           Value: !Sub ${VirtualCloudDescription} Private Subnet for Front End Web system[AZ1]
 
+  # NETWORK DEFINITION
+  InternetGateway:
+#    Type: AWS::EC2::EgressOnlyInternetGateway
+    Type: AWS::EC2::InternetGateway
+  AttachGateway:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref VirtualCloud
+      InternetGatewayId: !Ref 'InternetGateway'
+  RouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VirtualCloud
+  Route:
+    Type: AWS::EC2::Route
+    DependsOn: AttachGateway
+    Properties:
+      RouteTableId: !Ref 'RouteTable'
+      DestinationCidrBlock: !Ref DestinationCIDR
+      GatewayId: !Ref 'InternetGateway'
+  PublicSubnetARouteTable:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnetA
+      RouteTableId: !Ref RouteTable
+  PublicSubnetBRouteTable:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnetB
+      RouteTableId: !Ref RouteTable
+  #Define NAT for private subnets
+  # Define EIP
+  ElasticIPA:
+    Type: AWS::EC2::EIP
+    DependsOn: AttachGateway
+    Properties:
+      Domain: vpc
+  ElasticIPB:
+    Type: AWS::EC2::EIP
+    DependsOn: AttachGateway
+    Properties:
+      Domain: vpc
+
+  NATGatewayA:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt ElasticIPA.AllocationId
+      SubnetId: !Ref PublicSubnetA
+
+  NATGatewayB:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt ElasticIPB.AllocationId
+      SubnetId: !Ref PublicSubnetB
+
+  PrivateRouteTableA:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VirtualCloud
+  PrivateRouteTableToNATA:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PrivateRouteTableA
+      DestinationCidrBlock: !Ref DestinationCIDR
+      NatGatewayId: !Ref NATGatewayA
+  FrontEndWebSubnetARouteTable:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref FrontEndWebSubnetA
+      RouteTableId: !Ref PrivateRouteTableA
+
+  PrivateRouteTableB:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VirtualCloud
+  PrivateRouteTableToNATB:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PrivateRouteTableB
+      DestinationCidrBlock: !Ref DestinationCIDR
+      NatGatewayId: !Ref NATGatewayB
+  FrontEndWebSubnetBRouteTable:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref FrontEndWebSubnetB
+      RouteTableId: !Ref PrivateRouteTableB
+
+
 
   BastionAutoScalingGroup:
     Type: AWS::AutoScaling::AutoScalingGroup
@@ -198,19 +286,21 @@ Resources:
 
   FrontEndWebAutoScaling:
     Type: AWS::AutoScaling::AutoScalingGroup
+    DependsOn: AttachGateway
     Properties:
       AutoScalingGroupName: !Sub ${VirtualCloudDescription} Front End Servers ASG
       LaunchTemplate:
         LaunchTemplateId: !Ref FrontEndWebLaunchTemplate
-        Version: !Ref LaunchTemplateVersionNumber
+        Version: !GetAtt FrontEndWebLaunchTemplate.LatestVersionNumber
       VPCZoneIdentifier:
         - !Ref FrontEndWebSubnetA
         - !Ref FrontEndWebSubnetB
       TargetGroupARNs:
         - !Ref BalancerTargetGroup
-      MinSize: 1
+      MinSize: 2
       MaxSize: 6
       DesiredCapacity: 2
+
 
   FrontEndWebLaunchTemplate:
     Type: AWS::EC2::LaunchTemplate
@@ -219,12 +309,14 @@ Resources:
       LaunchTemplateData:
         InstanceType: !Ref InstanceType
         ImageId: !Ref LinuxImage
-        NetworkInterfaces:
-          - DeviceIndex: 0
-            AssociatePublicIpAddress: true
-            Groups:
-              - !Ref BastionSecurityGroup
-            DeleteOnTermination: true
+        SecurityGroupIds:
+          - !GetAtt BastionSecurityGroup.GroupId
+#          - NetworkInterfaces:
+#          - DeviceIndex: 0
+#            AssociatePublicIpAddress: true
+#            Groups:
+#              - !Ref BastionSecurityGroup
+#            DeleteOnTermination: true
 
   BalancerTargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
@@ -232,74 +324,77 @@ Resources:
       Port: 80
       Protocol: HTTP
       VpcId: !Ref VirtualCloud
+      TargetType: instance
 
   FrontEndWebServerLoadBalancer:
     Type: AWS::ElasticLoadBalancing::LoadBalancer
+    DependsOn:
+      - AttachGateway
+      - FrontEndWebAutoScaling
     Properties:
-      LoadBalancerName: "FEWLoadBalancer"
+      Scheme: internet-facing
+      Subnets:
+        - !Ref PublicSubnetA
+        - !Ref PublicSubnetB
+      SecurityGroups:
+        - !Ref BastionSecurityGroup
       Listeners:
         - LoadBalancerPort: "80"
           InstancePort: "80"
           Protocol: "HTTP"
-      Subnets:
-        - !Ref FrontEndWebSubnetA
-        - !Ref FrontEndWebSubnetB
-      HealthCheck:
-        Target: "HTTP:80/"
-        HealthyThreshold: "2"
-        UnhealthyThreshold: "5"
-        Interval: "50"
-        Timeout: "3"
+#      HealthCheck:
+#        Target: "HTTP:80/"
+#        HealthyThreshold: "2"
+#        UnhealthyThreshold: "5"
+#        Interval: "50"
+#        Timeout: "3"
 
-# NETWORK DEFINITION
-  InternetGateway:
-    Type: AWS::EC2::EgressOnlyInternetGateway
-    Properties:
-      VpcId: !Ref VirtualCloud
+#  LBListener:
+#    Type: AWS::ElasticLoadBalancingV2::Listener
+#    DependsOn: FrontEndWebServerLoadBalancer
+#    Properties:
+#      DefaultActions:
+#        - Type: forward
+#          TargetGroupArn: !Ref BalancerTargetGroup
+#      LoadBalancerArn: !Ref FrontEndWebServerLoadBalancer.Arn
+#      Port: 80
+#      Protocol: HTTP
 
-  AttachGateway:
-    Type: AWS::EC2::VPCGatewayAttachment
-    Properties:
-      VpcId: !Ref VirtualCloud
-      InternetGatewayId: !Ref InternetGateway
 
-  RouteTable:
-    Type: AWS::EC2::RouteTable
-    Properties:
-      VpcId: !Ref VirtualCloud
 
-  Route:
-    Type: AWS::EC2::Route
-    DependsOn: AttachGateway
-    Properties:
-      RouteTableId: !Ref RouteTable
-      DestinationCidrBlock: !Ref DestinationCIDR
-      GatewayId: !Ref InternetGateway
 
-  PublicSubnetARouteTable:
-    Type: AWS::EC2::SubnetRouteTableAssociation
-    Properties:
-      SubnetId: !Ref PublicSubnetA
-      RouteTableId: !Ref RouteTable
+#  PrivateRoute:
+#    Type: AWS::EC2::Route
+#    DependsOn: NATGateway
+#    Properties:
+#      RouteTableId: !Ref PrivateRouteTable
+#      DestinationCidrBlock: !Ref DestinationCIDR
+#      NatGatewayId: !Ref NATGateway
 
-  PublicSubnetBRouteTable:
-    Type: AWS::EC2::SubnetRouteTableAssociation
-    Properties:
-      SubnetId: !Ref PublicSubnetB
-      RouteTableId: !Ref RouteTable
-#Deine NAT for private subnets
+#  FrontEndWebSubnetARouteTable:
+#    Type: AWS::EC2::SubnetRouteTableAssociation
+#    Properties:
+#      SubnetId: !Ref FrontEndWebSubnetA
+#      RouteTableId: !Ref PrivateRouteTable
+#
+#  FrontEndWebSubnetBRouteTable:
+#    Type: AWS::EC2::SubnetRouteTableAssociation
+#    Properties:
+#      SubnetId: !Ref FrontEndWebSubnetB
+#      RouteTableId: !Ref PrivateRouteTable
 
-  FrontEndWebSubnetARouteTable:
-    Type: AWS::EC2::SubnetRouteTableAssociation
-    Properties:
-      SubnetId: !Ref FrontEndWebSubnetA
-      RouteTableId: !Ref RouteTable
 
-  FrontEndWebBRouteTable:
-    Type: AWS::EC2::SubnetRouteTableAssociation
-    Properties:
-      SubnetId: !Ref FrontEndWebSubnetA
-      RouteTableId: !Ref RouteTable
+#  FrontEndWebSubnetARouteTable:
+#    Type: AWS::EC2::SubnetRouteTableAssociation
+#    Properties:
+#      SubnetId: !Ref FrontEndWebSubnetA
+#      RouteTableId: !Ref RouteTable
+#
+#  FrontEndWebBRouteTable:
+#    Type: AWS::EC2::SubnetRouteTableAssociation
+#    Properties:
+#      SubnetId: !Ref FrontEndWebSubnetA
+#      RouteTableId: !Ref RouteTable
 
   NoIngressSecurityGroup:
     Type: AWS::EC2::SecurityGroup
