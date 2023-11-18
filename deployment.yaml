@@ -242,7 +242,7 @@ Resources:
       MaxSize: 1
       DesiredCapacity: 1
 
-#  BastionLaunchConfiguration:
+  #  BastionLaunchConfiguration:
 #    Type: AWS::AutoScaling::LaunchConfiguration
 #    Properties:
 #      LaunchConfigurationName: !Sub ${VirtualCloudDescription} Bastion Launch Config
