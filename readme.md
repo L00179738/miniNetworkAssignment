@@ -20,8 +20,8 @@ user location conaining running routes.
 
 - create VPC
 - create 2 AZ which can be easily expanded
-- create web server (public) (nested)
-- create jump box (public) (nested)
+- create jump box - Bastion - in load balancer group to ensure availability if one instance is down (public) (nested)
+- create web server in scalable and balanced group(privet) (nested)
 - create DB server (private) (nested ?)
 - create application server (private) (nested)
 - configure CIDR
@@ -55,6 +55,8 @@ user location conaining running routes.
 - add private and public zones
 - decide on the networking mask
 - create resources as above
+
+## implementation goals
 
 
 ## to documentation

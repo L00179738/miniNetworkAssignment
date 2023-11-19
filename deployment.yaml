@@ -39,7 +39,7 @@ Parameters:
     Default: 10.10.51.0/24
 
   DestinationCIDR:
-    Description: CIDR Definition for VPC - Class B
+    Description: CIDR Destinations
     Type: String
     Default: 0.0.0.0/0
 
@@ -242,7 +242,7 @@ Resources:
       DestinationCidrBlock: !Ref DestinationCIDR
       NatGatewayId: !Ref NATGatewayA
   FrontEndWebSubnetARouteTable:
-    Type: AWS::EC2::SubnetRouteTableAssociationZ
+    Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
       SubnetId: !Ref FrontEndWebSubnetA
       RouteTableId: !Ref PrivateRouteTableA
